@@ -1,0 +1,54 @@
+{
+    "name" : "简记",
+    "appid" : "__UNI__B9A211F",
+    "description" : "只保存在本机的轻量记账应用",
+    "versionName" : "1.4.6",
+    "versionCode" : "146",
+    "transformPx" : false,
+    "app-plus" : {
+        "usingComponents" : true,
+        "nvueStyleCompiler" : "uni-app",
+        "compilerVersion" : 3,
+        "splashscreen" : {
+            "alwaysShowBeforeRender" : true,
+            "waiting" : true,
+            "autoclose" : true,
+            "delay" : 0
+        },
+        "modules" : {
+            "SQLite" : {}
+        },
+        "distribute" : {
+            "android" : {
+                "minSdkVersion" : 23,
+                "targetSdkVersion" : 36,
+                "packagename" : "com.daidi.jianji",
+                "permissions" : [ "<uses-permission android:name=\"android.permission.VIBRATE\"/>" ]
+            },
+            "icons" : {
+                "android" : {
+                    "hdpi" : "icons/72x72.png",
+                    "xhdpi" : "icons/96x96.png",
+                    "xxhdpi" : "icons/144x144.png",
+                    "xxxhdpi" : "icons/192x192.png"
+                }
+            },
+            "ios" : {
+                "dSYMs" : false
+            },
+            "sdkConfigs" : {}
+        }
+    },
+    "quickapp" : {},
+    "mp-weixin" : {
+        "appid" : "",
+        "setting" : {
+            "urlCheck" : false
+        },
+        "usingComponents" : true
+    },
+    "uniStatistics" : {
+        "enable" : false
+    },
+    "vueVersion" : "3"
+}
