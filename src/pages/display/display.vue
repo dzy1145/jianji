@@ -6,28 +6,15 @@
            整块一起贴是因为状态栏那块留白在 topbar 上，单把进度条贴上去会钻到状态栏下面 -->
       <view class="head-stack">
         <view class="topbar" :style="{ paddingTop: `${headerTop}px` }">
-          <button
-            class="side-toggle"
-            :class="{ 'is-switching': switching }"
-            aria-label="切回真实账本"
-            @click="goBack"
-          >
-            <view class="side-toggle-icon" :class="{ 'is-out': switching }">
-              <view class="side-sheet is-back"></view>
-              <view class="side-sheet is-front"></view>
-            </view>
-            <view class="side-spinner" :class="{ 'is-in': switching }"></view>
+          <button class="side-toggle" aria-label="切回真实账本" @click="goBack">
+            <text class="side-toggle-icon">⇋</text>
           </button>
           <view class="head-copy">
             <text class="page-title">展示账本</text>
             <text class="head-sub">镜像副本 · 改动不影响真实账本</text>
           </view>
-          <button
-            class="text-action"
-            :class="{ disabled: exporting, 'is-done': copied }"
-            @click="copyExport"
-          >
-            {{ copied ? '已复制' : exporting ? '复制中' : '复制' }}
+          <button class="text-action" :class="{ disabled: exporting }" @click="copyExport">
+            {{ exporting ? '复制中' : '复制' }}
           </button>
         </view>
 
@@ -398,12 +385,7 @@ const theme = ref(uni.getStorageSync('jianji_theme') || 'sakura')
 const displayState = ref(loadDisplayState())
 const closingSheet = ref('')
 const virtualVisible = ref(false)
-// 正在切回真实账本：按钮里的图标换成转圈
-const switching = ref(false)
 const exporting = ref(false)
-// 复制成功的确认态：按钮原地变「已复制」约 0.9 秒再变回来
-const copied = ref(false)
-let copiedTimer = null
 // 正在直接改金额的那一行（key），以及输入框里的草稿
 const editingRowKey = ref('')
 const rowAmountDraft = ref('')
@@ -612,16 +594,10 @@ function persist() {
 /* ---------- 顶部与翻月 ---------- */
 
 function goBack() {
-  if (switching.value) return
-  // 底涨满 + 图标滑出 + 圆环滑入在按下瞬间同时发生，120ms 后开始退栈。
-  // 本页向右滑出（slide 的反向），和「往左推过去」形成对称的方向感
-  switching.value = true
-  setTimeout(() => {
-    uni.navigateBack({
-      delta: 1,
-      fail: () => uni.reLaunch({ url: '/pages/index/index' })
-    })
-  }, 120)
+  uni.navigateBack({
+    delta: 1,
+    fail: () => uni.reLaunch({ url: '/pages/index/index' })
+  })
 }
 
 async function changeMonth(delta) {
@@ -945,15 +921,7 @@ function copyExport() {
   try {
     uni.setClipboardData({
       data: text,
-      success: () => {
-        // 成功反馈落在按钮上（已复制），不再弹 toast——顶栏就在按钮旁边，
-        // 报告结果的地方离触发的地方越近越好看
-        copied.value = true
-        clearTimeout(copiedTimer)
-        copiedTimer = setTimeout(() => {
-          copied.value = false
-        }, 900)
-      },
+      success: () => uni.showToast({ title: '账单已复制', icon: 'success' }),
       fail: () => uni.showToast({ title: '复制失败，请重试', icon: 'none' }),
       complete: () => {
         exporting.value = false
@@ -972,8 +940,7 @@ button {
   padding: 0;
   line-height: 1;
   box-sizing: border-box;
-  /* 松手这半程带轻微过冲：缩下去再弹回时多走一点点才落定，手感才像实体键 */
-  transition: transform 120ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  transition: transform 140ms ease-out;
 }
 
 button::after {
@@ -981,12 +948,12 @@ button::after {
 }
 
 /* 按下反馈走 .button-hover 而不是 :active（uni-app 在 touchstart 时挂这个类，
-   WebView 里 <button> 的 :active 并不可靠）。按下那一刻必须 0ms 就位。
-   只做形变、不做变淡——叠 opacity 会让小字发虚，像在加载而不是被按住 */
+   WebView 里 <button> 的 :active 并不可靠）。按下那一刻必须 0ms 就位 */
 .button-hover {
   background-color: transparent;
   color: inherit;
-  transform: scale(0.96);
+  opacity: 0.72;
+  transform: scale(0.97);
 }
 
 button.button-hover {
@@ -1037,7 +1004,7 @@ button.button-hover {
   padding: 0 var(--sp-6) var(--sp-3);
   background: var(--surface-strong);
   background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(20px) saturate(180%);
 }
 
 .topbar {
@@ -1054,8 +1021,9 @@ button.button-hover {
   height: 64rpx;
   border-radius: var(--r-md);
   background: var(--surface);
-  box-shadow: inset 0 0 0 1rpx var(--line);
+  border: 1rpx solid var(--line);
   color: var(--text);
+  box-shadow: var(--shadow-xs);
 }
 
 /* 和首页那个 ⇋ 是同一个开关：同一本账的两面，位置固定在顶栏最左，尺寸一模一样。
@@ -1069,103 +1037,18 @@ button.button-hover {
   width: 64rpx;
   height: 64rpx;
   border-radius: var(--r-md);
-  background: var(--surface);
+  background: var(--accent-soft);
+  border: 1rpx solid var(--line);
   color: var(--accent-deep);
-  box-shadow: inset 0 0 0 1rpx var(--line);
-  /* 不写 overflow: hidden，否则 ::after 的 88rpx 命中区会被裁掉 */
-  isolation: isolate;
 }
 
-/* 和首页一致：按下时底色涨满 + 图标滑出 + 圆环滑入，三样同步 */
-.side-toggle::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: inherit;
-  background: linear-gradient(180deg, var(--btn-from), var(--btn-to));
-  opacity: 0;
-  transform: scale(0.35);
-  pointer-events: none;
-  transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease-out;
-}
-
-.side-toggle.is-switching::before {
-  opacity: 1;
-  transform: scale(1);
-  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 90ms linear;
-}
-
-/* 和首页那份一致：两页纸叠在一起 = 两份账 */
+/* 和首页那份一样：⇋ 是回退字形，基线偏低，靠 translateY 校正。
+   位移挂在图标上而不是按钮上，免得被按下时的 .button-hover 覆盖掉 */
 .side-toggle-icon {
-  position: relative;
-  z-index: 1;
   display: block;
-  width: 34rpx;
-  height: 32rpx;
-  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), opacity 140ms ease-out;
-}
-
-.side-toggle-icon.is-out {
-  transform: translateX(-150%);
-  opacity: 0;
-  transition-duration: 140ms, 100ms;
-}
-
-.side-sheet {
-  position: absolute;
-  width: 22rpx;
-  height: 26rpx;
-  border-radius: 4rpx;
-}
-
-.side-sheet.is-back {
-  top: -2rpx;
-  right: -2rpx;
-  border: 3rpx solid currentColor;
-  opacity: 0.55;
-}
-
-.side-sheet.is-front {
-  left: 0;
-  bottom: 0;
-  background: currentColor;
-}
-
-/* 点击后转圈，直到页面切完；与底色涨满、图标滑出同步 */
-.side-spinner {
-  position: absolute;
-  z-index: 1;
-  width: 32rpx;
-  height: 32rpx;
-  border-radius: 50%;
-  border: 3rpx solid rgba(255, 255, 255, 0.22);
-  border-top-color: var(--on-accent);
-  opacity: 0;
-  transform: translateX(150%);
-  /* 旋转用独立 rotate，写进 transform 会盖掉位移、圆环就不转了 */
-  animation: sideSpin 380ms linear infinite;
-  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), opacity 140ms ease-out;
-}
-
-.side-spinner.is-in {
-  opacity: 1;
-  transform: translateX(0);
-  transition-delay: 50ms;
-}
-
-@keyframes sideSpin {
-  from {
-    rotate: 0deg;
-  }
-  to {
-    rotate: 360deg;
-  }
-}
-
-.side-toggle.is-switching {
-  transform: none;
-  color: var(--on-accent);
+  font-size: var(--fs-xl);
+  line-height: 1;
+  transform: translateY(-4rpx);
 }
 
 /* 视觉尺寸不变，命中区撑到 88rpx（=44px） */
@@ -1190,14 +1073,6 @@ button.button-hover {
 .text-action.disabled {
   box-shadow: none;
   opacity: 0.5;
-}
-
-/* 复制成功：按钮原地变成绿色「已复制」，0.9 秒后自己退回 */
-.text-action.is-done {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--positive-text) 14%, transparent);
-  color: var(--positive-text);
-  box-shadow: none;
 }
 
 .head-copy {
@@ -1242,7 +1117,7 @@ button.button-hover {
   height: 68rpx;
   border-radius: var(--r-md);
   background: var(--surface);
-  box-shadow: inset 0 0 0 1rpx var(--line);
+  border: 1rpx solid var(--line);
   color: var(--accent-deep);
   font-size: var(--fs-2xl);
   line-height: 1;
@@ -1285,6 +1160,7 @@ button.button-hover {
   background: var(--surface);
   border: 1rpx solid var(--line);
   box-shadow: var(--shadow);
+  backdrop-filter: blur(20px) saturate(180%);
 }
 
 .progress-head {
@@ -1721,15 +1597,12 @@ button.button-hover {
 /* ---------- 底部按钮 ---------- */
 
 /* 用 margin-left 居中而不是 translateX：按下时的 .button-hover 会把 transform
-   整个换成 scale，用 transform 居中的按钮一按就跳。
-   和首页「记一笔」同一套：白底 + 内描边，按下时品牌色从中心涨满 */
+   整个换成 scale(0.97)，用 transform 居中的按钮一按就跳 */
 .add-button {
   position: fixed;
   left: 50%;
   bottom: calc(var(--sp-6) + env(safe-area-inset-bottom));
   z-index: var(--z-fab);
-  isolation: isolate;
-  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1737,47 +1610,12 @@ button.button-hover {
   height: 92rpx;
   margin-left: -190rpx;
   border-radius: var(--r-pill);
-  background: var(--surface-strong);
-  color: var(--text-strong);
+  background: linear-gradient(135deg, var(--btn-from), var(--btn-to));
+  color: var(--on-accent);
   font-size: var(--fs-md);
   font-weight: var(--fw-heavy);
-  letter-spacing: -0.01em;
-  box-shadow: inset 0 0 0 1rpx var(--line);
-  box-shadow: inset 0 0 0 1rpx var(--line), var(--shadow-xs);
-  transition: transform 120ms cubic-bezier(0.34, 1.4, 0.64, 1), color 140ms ease-out;
-}
-
-.add-button::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 0;
-  width: 160%;
-  aspect-ratio: 1 / 1;
-  transform: translate(-50%, -50%) scale(0.12);
-  border-radius: 50%;
-  background: linear-gradient(180deg, var(--btn-from), var(--btn-to));
-  opacity: 0;
-  pointer-events: none;
-  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease-out;
-}
-
-.add-button > text {
-  position: relative;
-  z-index: 1;
-  transition: color 120ms ease-out;
-}
-
-.add-button.button-hover {
-  color: var(--on-accent);
-  transform: scale(0.985);
-}
-
-.add-button.button-hover::before {
-  transform: translate(-50%, -50%) scale(1);
-  opacity: 1;
-  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 60ms linear;
+  box-shadow: var(--shadow-float);
+  box-shadow: 0 18rpx 42rpx color-mix(in srgb, var(--btn-from) 36%, transparent);
 }
 
 /* ---------- 弹层 ---------- */
@@ -1793,7 +1631,7 @@ button.button-hover {
   align-items: flex-end;
   justify-content: center;
   background: var(--scrim);
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(20px) saturate(160%);
   animation: maskIn 160ms ease-out;
 }
 
@@ -1812,7 +1650,7 @@ button.button-hover {
   /* 先写不透明兜底再写半透明：color-mix() 不被支持时整条声明会被丢弃而不是退化 */
   background: var(--surface-strong);
   background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px) saturate(180%);
   box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.5);
   color: var(--text);
   box-sizing: border-box;
@@ -2143,16 +1981,6 @@ button.button-hover {
 
   .progress-fill {
     transition: none;
-  }
-
-  /* 按下扩散的品牌色不做膨胀 */
-  .add-button::before {
-    transition-duration: 1ms;
-  }
-
-  /* 转圈是状态指示，不能减速到看不出在转 */
-  .side-spinner {
-    animation-duration: 700ms;
   }
 
   @keyframes fadeIn {

@@ -7,17 +7,8 @@
     <view class="shell" :class="monthSlide">
       <view class="topbar" :style="{ paddingTop: `${headerTop}px` }">
         <view class="topbar-left">
-          <button
-            class="side-toggle"
-            :class="{ 'is-switching': switching }"
-            aria-label="切到展示账本"
-            @click="openDisplayLedger"
-          >
-            <view class="side-toggle-icon" :class="{ 'is-out': switching }">
-              <view class="side-sheet is-back"></view>
-              <view class="side-sheet is-front"></view>
-            </view>
-            <view class="side-spinner" :class="{ 'is-in': switching }"></view>
+          <button class="side-toggle" aria-label="切到展示账本" @click="openDisplayLedger">
+            <text class="side-toggle-icon">⇋</text>
           </button>
           <view class="date-copy">
             <text class="date-label">{{ todayLabel }}</text>
@@ -78,7 +69,10 @@
 
       <view class="section trend-section">
         <view class="section-heading">
-          <text class="section-title">趋势</text>
+          <view>
+            <text class="section-title">消费趋势</text>
+            <text class="section-sub">{{ trendSubtitle }} · 按住看图上的明细</text>
+          </view>
           <view class="segment">
             <view class="segment-thumb" :style="segmentThumbStyle(trendMode, segmentKeys.trend)"></view>
             <button
@@ -167,7 +161,10 @@
 
       <view class="section distribution-section">
         <view class="section-heading">
-          <text class="section-title">占比</text>
+          <view>
+            <text class="section-title">分类占比</text>
+            <text class="section-sub">本月各类消费构成</text>
+          </view>
         </view>
 
         <view v-if="categoryStats.length" class="distribution-panel">
@@ -175,57 +172,38 @@
             class="pie-chart-wrap"
             :style="{ aspectRatio: `${pieChart.width} / ${pieChart.height}` }"
           >
-            <!-- 手势挂在 canvas 上，并且 touchmove 用 .prevent：
-                 uni 只对带 .prevent 的监听器注册成「非被动」，手写
-                 event.preventDefault() 在被动监听器里是空调用——这就是
-                 「旋转的时候页面还能上下拖」一直修不掉的原因。
-                 图例行在 canvas 之上、不在这条链上，所以在那儿上下滑仍然滚页面 -->
             <canvas
               class="pie-chart-svg"
               canvas-id="pieCanvas"
               id="pieCanvas"
             ></canvas>
 
-            <!-- 手势命中层：只盖住圆盘，卡片其余地方（含图例行之间）照常原生滚动。
-                 挂在 canvas 上的话，canvas 是 inset:0 铺满整张卡片的，整张卡片
-                 的竖滑都会被掐掉 -->
-            <view
-              class="pie-hit"
-              :style="pieChart.hit"
-              @touchstart="onPieTouchStart"
-              @touchmove.prevent="onPieTouchMove"
-              @touchend="onPieTouchEnd"
-              @touchcancel="onPieTouchEnd"
-            ></view>
-
-            <!-- 图例只留三行：中间是当前项、放大，上下两行缩小后退。
-                 百分比和金额不再出现在这一列——它们浮在选中那块饼上 -->
             <view
               v-for="item in pieChart.slices"
               :key="`legend-${item.key}`"
               class="pie-legend-row"
-              :class="{ 'is-minor': !item.major, 'is-selected': item.selected }"
-              :style="{
-                top: `${item.legendPercent}%`,
-                left: `${item.legendLeft}%`,
-                opacity: item.legendOpacity,
-                transform: `translateY(-50%) rotate(${item.legendTilt}deg) scale(${item.legendScale})`
-              }"
+              :style="{ top: `${item.labelPercent}%` }"
             >
               <view class="pie-legend-dot" :style="{ backgroundColor: item.color }"></view>
               <text class="pie-label-name">{{ item.emoji }} {{ item.name }}</text>
+              <text class="pie-label-meta">{{ item.percent }}%</text>
+              <text class="pie-label-amount">¥{{ item.amount.toFixed(2) }}</text>
             </view>
           </view>
         </view>
 
         <view v-else class="empty-panel">
           <text class="empty-title">本月还没有支出</text>
+          <text class="empty-sub">记下第一笔后，这里会显示分类占比</text>
         </view>
       </view>
 
       <view class="section bill-section">
         <view class="section-heading bill-heading">
-          <text class="section-title">{{ selectionMode ? `已选 ${selectedIds.length} 笔` : '明细' }}</text>
+          <view>
+            <text class="section-title">{{ selectionMode ? `已选 ${selectedIds.length} 笔` : '账单明细' }}</text>
+            <text class="section-sub">{{ selectionMode ? '点击账单继续多选' : '点击修改，长按可多选' }}</text>
+          </view>
           <button v-if="selectionMode" class="text-button" @click="toggleSelectAll">
             {{ allSelected ? '取消全选' : '全选' }}
           </button>
@@ -319,6 +297,7 @@
           </template>
           <template v-else>
             <text class="empty-title">这个月还没有记录</text>
+            <text class="empty-sub">点下面的“记一笔”开始</text>
           </template>
         </view>
       </view>
@@ -450,13 +429,8 @@
           />
         </view>
 
-        <button
-          class="primary-button"
-          :class="{ disabled: !formValid, 'is-done': saveDone }"
-          @click="submitEditor"
-        >
-          <text v-if="saveDone" class="save-check">✓</text>
-          {{ saveDone ? '已保存' : editingId ? '保存修改' : form.type === 'income' ? '保存收入' : '保存账单' }}
+        <button class="primary-button" :class="{ disabled: !formValid }" @click="submitEditor">
+          {{ editingId ? '保存修改' : form.type === 'income' ? '保存收入' : '保存账单' }}
         </button>
       </view>
     </view>
@@ -783,7 +757,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref } from 'vue'
 import { onReady, onShow } from '@dcloudio/uni-app'
 import {
   CATEGORIES,
@@ -897,16 +871,12 @@ const importText = ref('')
 const importBusy = ref(false)
 const selectionMode = ref(false)
 const selectedIds = ref([])
-// 正在切到展示账本：按钮里的图标换成转圈
-const switching = ref(false)
 const loadError = ref(false)
 // 备注是否被用户手动改过。改过之后，切分类 / 切收支类型都不再自动覆盖它
 const noteTouched = ref(false)
 const editingId = ref(null)
 const amountFocused = ref(false)
 const saving = ref(false)
-// 保存成功的确认态：按钮原地变 ✓ 已保存，停半秒再关抽屉
-const saveDone = ref(false)
 const trendRising = ref(false)
 const monthSlide = ref('')
 
@@ -1041,195 +1011,46 @@ const formValid = computed(() => !amountError.value && Boolean(String(form.amoun
 const allSelected = computed(
   () => visibleBills.value.length > 0 && selectedIds.value.length === visibleBills.value.length
 )
-
-// ===== 饼图：一块真的躺在卡片上的 3D 圆盘 =====
-
-// 视角压扁系数：1 是正上方看下来的正圆，0 是侧面看到的一条线。
-// 饼是「摊在桌面上」的，压得越扁越像躺着的圆盘
-const PIE_FLATTEN = 0.5
-// 柱体厚度（屏幕像素）。薄了像描边，厚了就是一块蛋糕
-const PIE_THICKNESS = 14
-// 裂缝是「锯口」，按屏幕像素算，不是按角度：同一个锯口，细扇区被吃掉的
-// 比例更大，所以角度缝隙必须换算，否则 3% 的小块会被削掉三成。
-// 1.2–2.4px 是装了十来个分类之后还能看成一个整饼的上限：再宽，五六个细块
-// 挨在一起时，每块的侧壁和剖面会在下沿排成一排手指
-const PIE_KERF_MIN = 1.2
-const PIE_KERF_MAX = 2.4
-// 接地阴影的错位量（屏幕像素）
-const PIE_CONTACT = 6
-// 选中块沿径向外移 + 抬起（抬起是屏幕上移，露出剖面和底面）
-const PIE_POP = 12
-const PIE_LIFT = 7
-// 每块自己的高度偏移：饼不是一块整板切的，切下来的每一块都不在同一个平面
-const PIE_TILT = 3.5
-// 半径 92 / 圆心 73 / 非选中 0.68R / 选中 1.34R / 外移 12
-// 这两条边是被联立钉死的：
-//   左边缘 = 73 - 0.68*92 = 10.4（原来 13.2）
-//   选中块右边缘 = 73 + 1.34*92 + 12 = 208.3（原来 209.2）
-// 圆心能往左挪多少，完全由「非选中缩多小」决定——idle + focus 的和被
-// 两条边的距离固定住（约 2.02），idle 越小圆心越靠左，选中块也随之越长。
-// 试过 idle 0.55 / focus 1.47，圆心能挪到 62，但选中那块会变成一根长条
-const PIE_RADIUS = 92
-const PIE_CX = 73
-// 10% 以上的算大块，转到 3 点方向时块面上写字；太小的块塞不下字，只在图例里给数
-const PIE_MAJOR_MIN = 10
-// 图例每格的高度百分比
-const PIE_LEGEND_STEP = 34
-// 图例列的基准左边距（占画布宽度的百分比）、圆弧往右让开的像素、倾斜系数
-const PIE_LEGEND_LEFT = 72
-const PIE_LEGEND_BULGE = 6
-const PIE_LEGEND_TILT = 0.28
-// 选中块右侧「占比 / 金额」的字号（直接是画布像素，不乘 scale，方便调）
-const PIE_LABEL_SIZE = 30
-const PIE_LABEL_SIZE_SUB = 25
-// 上下两行往右退的像素（配合缩放，读起来像退到后面）
-const PIE_LEGEND_DEPTH = 9
-// 图例中间那行比上下两行放大多少
-const PIE_LEGEND_FOCUS_SCALE = 1.34
-
-// 稳定的伪随机（同一个 index 永远得到同一个数），用来做「不均匀」：
-// 每块的裂缝宽度、抬起高度都不一样，但每次重绘不能抖
-function pieJitter(index, salt = 0) {
-  const value = Math.sin((index + 1) * 12.9898 + salt * 78.233) * 43758.5453
-  return value - Math.floor(value)
-}
-
-// 饼图整体旋转角度（度）。手指拖它，松手吸附到最近的块心
-const pieRotation = ref(0)
-
-// 把一个旋转角度算成一组扇区。吸附时也要用同一套几何，所以单独拆出来，
-// 得能接受「还没提交到响应式」的角度
-function buildPieSlices(rotation) {
-  let cursor = -90
-  return categoryStats.value.map((item) => {
-    const percent = Number(item.percent) || 0
-    const sweep = Math.max(0, Math.min(360, percent * 3.6))
-    // cursor 一直累加「未旋转」的基准角，rotation 只加到起点上。
-    // 之前把 rotation 从累加里减掉，后面的扇区起点全错位、挤成一团
-    const startAngle = cursor + rotation
-    cursor += sweep
-    const midAngle = startAngle + sweep / 2
-    // 归一到 (-180, 180]：0° 就是 3 点方向，也就是「选中位」
-    const normalized = ((((midAngle + 180) % 360) + 360) % 360) - 180
-    return {
-      ...item,
-      percent,
-      sweep,
-      startAngle,
-      endAngle: startAngle + sweep,
-      midAngle,
-      normalized,
-      major: percent >= PIE_MAJOR_MIN,
-      selected: false,
-      legendPercent: 50,
-      legendOpacity: 0
-    }
-  })
-}
+const trendSubtitle = computed(() => {
+  if (trendMode.value === 'month') return `最近 ${trendCounts.month} 个月`
+  if (trendMode.value === 'year') return `最近 ${trendCounts.year} 年`
+  return `最近 ${trendCounts.day} 天`
+})
 
 const pieChart = computed(() => {
   const width = 360
-  const slices = buildPieSlices(pieRotation.value)
-  const height = Math.max(172, Math.min(210, slices.length * 15 + 44))
-  const count = slices.length || 1
+  const rowGap = 36
+  const height = Math.max(228, categoryStats.value.length * rowGap + 46)
+  const cx = 92
+  const cy = height / 2
+  const rx = 70
+  const ry = 53
+  const depth = 18
+  let cursorAngle = -90
+  const labelTop = 30
+  const labelBottom = height - 28
 
-  // 3 点方向（0°）压在哪块上，那块就是选中项。
-  // anchorFrac 是 0° 在这块里的位置（0 = 起点，1 = 终点），图例靠它连续滚动
-  let anchorIndex = -1
-  let anchorFrac = 0.5
-  for (let index = 0; index < slices.length; index += 1) {
-    const slice = slices[index]
-    if (slice.sweep <= 0) continue
-    const into = (((-slice.startAngle) % 360) + 360) % 360
-    if (into <= slice.sweep) {
-      anchorIndex = index
-      anchorFrac = Math.min(1, into / slice.sweep)
-      break
+  const slices = categoryStats.value.map((item, index) => {
+    const sweep = Math.max(0, Math.min(360, (Number(item.percent) || 0) * 3.6))
+    const startAngle = cursorAngle
+    const endAngle = cursorAngle + sweep
+    cursorAngle = endAngle
+    const labelRatio = categoryStats.value.length === 1
+      ? 0.5
+      : index / Math.max(1, categoryStats.value.length - 1)
+    const labelY = labelTop + (labelBottom - labelTop) * labelRatio
+
+    return {
+      ...item,
+      startAngle,
+      endAngle,
+      labelY,
+      labelPercent: (labelY / height) * 100
     }
-  }
-  // 正卡在两条裂缝之间：没有块真的盖住 0°，取离得最近的那块当锚，
-  // 别让整列在拖动过程中跳一格
-  if (anchorIndex < 0) {
-    anchorIndex = 0
-    slices.forEach((slice, index) => {
-      if (Math.abs(slice.normalized) < Math.abs(slices[anchorIndex].normalized)) anchorIndex = index
-    })
-    anchorFrac = 0.5
-  }
-
-  // 行坐标：3 点线上那块落在 50%，其余按序号上下铺开。
-  // 用环形距离绕回，转满一圈时整列是无缝循环的
-  const anchor = anchorIndex + anchorFrac - 0.5
-  const centerY = (height - PIE_THICKNESS) / 2
-  slices.forEach((slice, index) => {
-    let distance = (((index - anchor + count / 2) % count) + count) % count
-    distance -= count / 2
-    const percent = 50 + distance * PIE_LEGEND_STEP
-    slice.selected = index === anchorIndex
-    slice.legendPercent = percent
-    // 场上只留三行：中间是当前项（原大），上下两行缩小、往右退、越远越淡，
-    // 再远的直接不显示——一排十几行读不过来，转盘只需要「上一格 / 这一格 / 下一格」
-    const distanceAbs = Math.abs(distance)
-    slice.legendScale = Math.max(0.62, 0.86 - distanceAbs * 0.1)
-    if (distanceAbs < 0.5) slice.legendScale = PIE_LEGEND_FOCUS_SCALE
-    slice.legendOpacity = Math.max(0, Math.min(1, 1.45 - distanceAbs * 1.1))
-    // 整列绕着右上方一个很远的圆心排开：中点最靠近饼，上下两端往右让开，
-    // 看起来就像文字贴着饼的外沿铺开（圆心在右侧，弧口朝左）
-    const dy = (percent / 100) * height - centerY
-    const norm = Math.min(1, Math.abs(dy) / (height * 0.45))
-    slice.legendLeft = PIE_LEGEND_LEFT + (PIE_LEGEND_BULGE * norm * norm) / width * 100
-
-        // 每一行按它在圆盘平面上的角度倾斜（纵向距离除以压扁系数换算），
-        // 上端翘、下端压，中点水平——和饼的椭圆是同一种投影
-        const dxPx = (PIE_LEGEND_LEFT / 100) * width - PIE_CX
-        const phi = (Math.atan2(dy / PIE_FLATTEN, dxPx) * 180) / Math.PI
-        slice.legendTilt = -phi * PIE_LEGEND_TILT
-        // 上下两行往右退一点，配合缩放读起来像退到后面
-        slice.legendLeft += (Math.min(1, distanceAbs) * PIE_LEGEND_DEPTH) / width * 100
   })
 
-  return {
-    width,
-    height,
-    cx: PIE_CX,
-    cy: (height - PIE_THICKNESS) / 2,
-    radius: PIE_RADIUS,
-    depth: PIE_THICKNESS,
-    // 手势命中层只盖住圆盘本身（外弹和抬起都算上）。canvas 是铺满整张卡片的，
-    // 手势挂在它身上的话，图例行之间的空隙也全成了滚动死区——整张卡片竖滑不动
-    hit: {
-      left: `${((PIE_CX - PIE_RADIUS - 2) / width) * 100}%`,
-      top: `${(((height - PIE_THICKNESS) / 2 - PIE_RADIUS * PIE_FLATTEN - PIE_LIFT - 2) / height) * 100}%`,
-      width: `${((PIE_RADIUS * 2 + PIE_POP + 4) / width) * 100}%`,
-      height: `${((PIE_RADIUS * PIE_FLATTEN * 2 + PIE_THICKNESS + PIE_LIFT + 4) / height) * 100}%`
-    },
-    slices
-  }
+  return { width, height, cx, cy, rx, ry, depth, slices }
 })
-
-// 数据一变（翻月 / 记账），把最大的那块转到 3 点方向的选中位
-watch(
-  () => categoryStats.value.map((item) => `${item.key}:${item.percent}`).join('|'),
-  () => {
-    const stats = categoryStats.value
-    if (!stats.length) return
-    let cursor = -90
-    let bestStart = -90
-    let bestSweep = 0
-    let bestPercent = -1
-    stats.forEach((item) => {
-      const sweep = Math.max(0, Math.min(360, (Number(item.percent) || 0) * 3.6))
-      if ((Number(item.percent) || 0) > bestPercent) {
-        bestPercent = Number(item.percent) || 0
-        bestStart = cursor
-        bestSweep = sweep
-      }
-      cursor += sweep
-    })
-    pieRotation.value = -(bestStart + bestSweep / 2)
-  },
-  { immediate: true }
-)
 
 // 只收支出（收入没有具体日期，进不了日期分组）；小计跟统计同口径，私人账目也算进去。
 const groupedBills = computed(() => {
@@ -1425,7 +1246,6 @@ async function loadData() {
     // 重载（含翻月）时连多选状态一起收掉，否则屏幕上留着「已选 0 笔」的批量栏要点取消
     selectionMode.value = false
     loadError.value = false
-    pieNeedReveal = true
     scheduleChartRender()
   } catch (error) {
     // 数据库没就绪 / 查询失败时别只留一个空账本，给出错误态和重试入口
@@ -1437,341 +1257,6 @@ async function loadData() {
 
 let chartRenderTimer = null
 let monthSlideTimer = null
-
-/* ---------- 饼图：手指按着就跟手转，松手带惯性吸附 ---------- */
-
-// 1px 横移 = 1.05°：滑 35px 就过一格（10 类时一格约 36°），
-// 三下就是一圈。之前 0.62 太钝，转一格要拉 58px，手上要挪一大截
-const PIE_DEG_PER_PX = 1.05
-
-// App 端触摸事件的 clientX/clientY 本来就是 CSS 像素，和布局、
-// boundingClientRect 同单位——不需要换算。之前乘过 1/dpr，
-// 结果整条手势慢了 3.24 倍（滑 60px 才转 19°），是错的
-const PIE_TOUCH_SCALE = 1
-
-let pieDragStartX = 0
-let pieDragStartY = 0
-let pieDragStartRotation = 0
-let pieDragPrevX = 0
-let pieDragPrevTime = 0
-let pieDragVelocity = 0
-// 拖动中先把角度写在这里，由 rAF 一帧提交一次；每个 touchmove 都写
-// pieRotation.value 会让图例那十行跟着重渲染
-let piePendingRotation = 0
-
-// —— 选中块的「由小变大」弹簧 ——
-// 每块一个 0.95 / 1.06 的半径比例，被选中时不是瞬间跳过去，而是带过冲再回弹。
-// 刚度 140 / 阻尼 10 → ω≈11.8 rad/s、ζ≈0.42：冲过头 23% 再弹回来，
-// 全程约 600ms。之前是 320/22（ζ≈0.61、350ms），太快，弹不出来
-// 刚度 110 / 阻尼 9 → ω≈10.5 rad/s、ζ≈0.43：过冲 22%，全程约 660ms。
-// 半径差必须给够（0.90 → 1.10，位移 0.20R）——过冲量是位移的 22%，
-// 位移只有 0.11R 时那点过冲只有 2px，看不出来
-const PIE_SCALE_IDLE = 0.68
-const PIE_SCALE_FOCUS = 1.34
-const PIE_SCALE_STIFFNESS = 110
-const PIE_SCALE_DAMPING = 9
-const pieScales = {}
-let pieScaleRaf = 0
-let pieScaleTime = 0
-
-function pieScaleFor(key, selected) {
-  const target = selected ? PIE_SCALE_FOCUS : PIE_SCALE_IDLE
-  let entry = pieScales[key]
-  if (!entry) {
-    // 第一次见到这个分类时直接落在目标值，不播动画（否则进页面整圈会抖一下）
-    entry = pieScales[key] = { value: target, velocity: 0, target }
-    return entry.value
-  }
-  entry.target = target
-  // 关了动效就直接落到目标值，否则弹簧循环不会启动，那块会永远停在 0.95
-  if (prefersReducedMotion) {
-    entry.value = target
-    entry.velocity = 0
-  }
-  return entry.value
-}
-
-function stepPieScales() {
-  const now = Date.now()
-  const dt = Math.min(0.032, Math.max(0.001, (now - pieScaleTime) / 1000))
-  pieScaleTime = now
-  let moving = false
-  Object.keys(pieScales).forEach((key) => {
-    const entry = pieScales[key]
-    // 弹簧：加速度 = 刚度 × 位移，减去阻尼 × 速度
-    entry.velocity +=
-      ((entry.target - entry.value) * PIE_SCALE_STIFFNESS - entry.velocity * PIE_SCALE_DAMPING) * dt
-    entry.value += entry.velocity * dt
-    if (Math.abs(entry.target - entry.value) < 0.0006 && Math.abs(entry.velocity) < 0.02) {
-      entry.value = entry.target
-      entry.velocity = 0
-    } else {
-      moving = true
-    }
-  })
-  if (pieRectCache) drawPieCanvas(pieRectCache)
-  if (moving) {
-    pieScaleRaf = rafFn(stepPieScales)
-  } else {
-    pieScaleRaf = 0
-  }
-}
-
-function startPieScaleLoop() {
-  if (pieScaleRaf) return
-  if (prefersReducedMotion) return
-  pieScaleTime = Date.now()
-  pieScaleRaf = rafFn(stepPieScales)
-}
-
-// —— 转得快时被甩出去（离心） ——
-// 速度单位是「度/毫秒」，1.2 大约是正常一次快拨。pieSpinOut 是 0..1 的强度，
-// 平滑跟过去而不是直接用它：松手速度归零时，饼要自己收回来，不能啪一下弹回
-const PIE_SPIN_POP = 7
-let pieSpinOut = 0
-let pieSpinTarget = 0
-let pieSpinRaf = 0
-
-function setPieSpin(speed) {
-  pieSpinTarget = Math.min(1, Math.abs(speed) / 1.2)
-  if (pieSpinRaf || prefersReducedMotion) return
-  const step = () => {
-    pieSpinOut += (pieSpinTarget - pieSpinOut) * 0.22
-    pieSpinTarget *= 0.86
-    if (pieRectCache) drawPieCanvas(pieRectCache)
-    if (pieSpinOut > 0.004 || pieSpinTarget > 0.004) {
-      pieSpinRaf = rafFn(step)
-    } else {
-      pieSpinOut = 0
-      pieSpinTarget = 0
-      pieSpinRaf = 0
-      if (pieRectCache) drawPieCanvas(pieRectCache)
-    }
-  }
-  pieSpinRaf = rafFn(step)
-}
-let pieDragging = false
-let pieDragLocked = false
-let pieFrameRaf = 0
-let pieSnapRaf = 0
-// 按在饼图上哪个位置决定了「往哪边拖算正转」：手按在下半圈时把饼往左推，
-// 饼该跟着手逆着表针走；按在上半圈则反过来。之前一律「右拖=顺时针」，
-// 于是按着下半部往左拖，饼反向转
-let pieGrabSign = 1
-let pieGrabOffsetX = 0
-let pieGrabOffsetY = 0
-
-function cancelPieSnap() {
-  if (!pieSnapRaf) return
-  cafFn(pieSnapRaf)
-  pieSnapRaf = 0
-}
-
-// 拖拽期间一帧最多画一次。这里**不能** debounce——之前是 80ms 的 setTimeout，
-// 手指一直在动就一直重置，等于中途中一张都不画，松手才蹦一下，所以根本不跟手。
-// 另外也别在这里重新量画布：createSelectorQuery 是异步往返，量回来的尺寸
-// 还是上一帧的。拖动时直接用上次量到的包围盒
-function schedulePieFrame() {
-  if (pieFrameRaf) return
-  pieFrameRaf = rafFn(() => {
-    pieFrameRaf = 0
-    if (piePendingRotation !== pieRotation.value) pieRotation.value = piePendingRotation
-    if (pieRectCache) drawPieCanvas(pieRectCache)
-  })
-}
-
-function onPieTouchStart(event) {
-  const touch = event.touches && event.touches[0]
-  if (!touch) return
-  // 第二根手指按下会再触发一次 touchstart，把第一根手指的当前位置当成新起点，
-  // 饼会「跳」一下。正在拖就忽略后续按下
-  if (pieDragging) return
-  cancelPieSnap()
-  const startX = touch.clientX * PIE_TOUCH_SCALE
-  const startY = touch.clientY * PIE_TOUCH_SCALE
-  pieDragStartX = startX
-  pieDragStartY = startY
-  pieDragPrevX = startX
-  pieDragPrevTime = Date.now()
-  pieDragStartRotation = pieRotation.value
-  piePendingRotation = pieRotation.value
-  pieDragVelocity = 0
-  pieDragging = true
-  pieDragLocked = false
-  pieGrabSign = 0
-  pieGrabOffsetX = 0
-  pieGrabOffsetY = 0
-  uni
-    .createSelectorQuery()
-    .select('#pieCanvas')
-    .boundingClientRect((rect) => {
-      if (!rect || !rect.width) return
-      pieRectCache = rect
-      const chart = pieChart.value
-      pieGrabOffsetX = startX - (rect.left + chart.cx * (rect.width / chart.width))
-      pieGrabOffsetY = startY - (rect.top + chart.cy * (rect.height / chart.height))
-      // 已经锁定就不要再改符号了：同一段 dx 中途换向会让饼「跟一下就翻脸」
-      if (pieDragLocked) return
-      // 左右两侧（|x| 远大于 |y|）时横向拖动的含义是明确的，不用翻符号
-      pieGrabSign = Math.abs(pieGrabOffsetY) > Math.abs(pieGrabOffsetX) * 0.45 ? (pieGrabOffsetY > 0 ? -1 : 1) : 1
-    })
-    .exec()
-}
-
-function onPieTouchMove(event) {
-  const touch = event.touches && event.touches[0]
-  if (!touch || !pieDragging) return
-  const pointerX = touch.clientX * PIE_TOUCH_SCALE
-  const pointerY = touch.clientY * PIE_TOUCH_SCALE
-  const dx = pointerX - pieDragStartX
-  const dy = pointerY - pieDragStartY
-  // 方向锁定：先动够 8px 再判定，且锥形只留水平方向 ±35°
-  if (!pieDragLocked) {
-    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return
-    if (Math.abs(dy) > Math.abs(dx) * 0.7) {
-      // 竖直方向：这一手不是转饼。命中层上挂了 .prevent（事件进来之前就
-      // preventDefault 了），所以这里放不放弃都滚不了页面——真正让页面能滚的
-      // 是「手势区只覆盖圆盘」，见模板里的 .pie-hit
-      pieDragging = false
-      return
-    }
-    // 符号要等异步量的包围盒回来才算得出来。没回来之前先不锁，
-    // 否则先用默认方向转一段、回调一到立刻换向
-    if (pieGrabSign === 0) return
-    pieDragLocked = true
-  }
-  const now = Date.now()
-  const elapsed = Math.max(1, now - pieDragPrevTime)
-  // 只用最近一段的位移算速度，抬手时拿它推惯性
-  pieDragVelocity = ((pointerX - pieDragPrevX) / elapsed) * PIE_DEG_PER_PX * pieGrabSign
-  pieDragPrevX = pointerX
-  pieDragPrevTime = now
-  setPieSpin(pieDragVelocity)
-  piePendingRotation = pieDragStartRotation + dx * PIE_DEG_PER_PX * pieGrabSign
-  schedulePieFrame()
-}
-
-function onPieTouchEnd(event) {
-  if (!pieDragging) return
-  const locked = pieDragLocked
-  pieDragging = false
-  pieDragLocked = false
-  if (!locked) {
-    // 没锁定 = 手指没怎么移动 = 点击：把点到的那块转到 3 点方向
-    rotateSliceToFocus(event)
-    return
-  }
-  // 把最后一帧还没提交的角度补上，否则吸附会从上一帧的位置起算
-  if (pieFrameRaf) {
-    cafFn(pieFrameRaf)
-    pieFrameRaf = 0
-  }
-  pieRotation.value = piePendingRotation
-  // 抬手前如果手指停住过，旧速度不该继续生效，否则松手还会甩出去一段
-  const idle = Date.now() - pieDragPrevTime
-  const velocity = idle > 80 ? 0 : pieDragVelocity
-  glidePie(pieRotation.value, velocity)
-}
-
-// 松手后的滑行：速度按指数衰减，一直转到快停了才吸附。
-// 以前是「按速度外推 90ms 取个终点再直接吸附」，等于松手就定住，
-// 感觉像被粘住——真正的惯性要能看到它自己滑过去、越滑越慢，最后咔一声归位
-function glidePie(from, velocity) {
-  cancelPieSnap()
-  if (prefersReducedMotion || Math.abs(velocity) < 0.08) {
-    animatePieTo(snapPieRotation(from))
-    return
-  }
-  let rotation = from
-  let speed = velocity
-  let last = Date.now()
-  const tick = () => {
-    const now = Date.now()
-    const dt = Math.max(1, Math.min(40, now - last))
-    last = now
-    speed *= Math.exp(-dt / 300)
-    rotation += speed * dt
-    pieRotation.value = rotation
-    setPieSpin(speed)
-    if (pieRectCache) drawPieCanvas(pieRectCache)
-    if (Math.abs(speed) > 0.035) {
-      pieSnapRaf = rafFn(tick)
-    } else {
-      pieSnapRaf = 0
-      animatePieTo(snapPieRotation(rotation))
-    }
-  }
-  tick()
-}
-
-// 点某块 → 把它转到 3 点方向。命中判定要在「压扁后的圆盘坐标系」里算：
-// 屏幕 y 除以 PIE_FLATTEN 才是圆盘上真正的角度，否则点在椭圆上下两端会判错块
-function rotateSliceToFocus(event) {
-  // touchend 在 uni 的合成事件里不一定带 changedTouches，退回到按下时记的位置
-  const touch =
-    (event && event.changedTouches && event.changedTouches[0]) ||
-    (event && event.touches && event.touches[0]) ||
-    null
-  const pointerX = touch ? touch.clientX * PIE_TOUCH_SCALE : pieDragStartX
-  const pointerY = touch ? touch.clientY * PIE_TOUCH_SCALE : pieDragStartY
-  const rect = pieRectCache
-  if (!rect || !rect.width) return
-  const chart = pieChart.value
-  const centerX = rect.left + chart.cx * (rect.width / chart.width)
-  const centerY = rect.top + chart.cy * (rect.height / chart.height)
-  const offsetX = pointerX - centerX
-  const offsetY = (pointerY - centerY) / PIE_FLATTEN
-  const distance = Math.hypot(offsetX, offsetY)
-  const radius = chart.radius * (rect.width / chart.width)
-  // 圆心附近方向没有意义，圆外是卡片空白，都不响
-  if (distance < radius * 0.16 || distance > radius * 1.06) return
-  const angle = (Math.atan2(offsetY, offsetX) * 180) / Math.PI
-  let best = null
-  let bestDelta = Infinity
-  chart.slices.forEach((slice) => {
-    const delta = ((((angle - slice.midAngle + 180) % 360) + 360) % 360) - 180
-    if (Math.abs(delta) > slice.sweep / 2) return
-    if (Math.abs(delta) < bestDelta) {
-      bestDelta = Math.abs(delta)
-      best = slice
-    }
-  })
-  if (!best) return
-  animatePieTo(pieRotation.value - best.normalized)
-}
-
-// 把任意角度对齐到「某块的正中刚好落在 3 点方向」
-function snapPieRotation(rotation) {
-  const slices = buildPieSlices(rotation)
-  if (!slices.length) return rotation
-  let best = slices[0]
-  slices.forEach((slice) => {
-    if (Math.abs(slice.normalized) < Math.abs(best.normalized)) best = slice
-  })
-  return rotation - best.normalized
-}
-
-// 吸附不能瞬移：一帧跳过去，视觉上那块是「闪」到正中的。补一段 200-400ms 的收尾
-function animatePieTo(target) {
-  cancelPieSnap()
-  const from = pieRotation.value
-  const delta = target - from
-  if (prefersReducedMotion || Math.abs(delta) < 0.05) {
-    pieRotation.value = target
-    schedulePieFrame()
-    return
-  }
-  const duration = Math.min(420, 190 + Math.abs(delta) * 1.1)
-  const startedAt = Date.now()
-  const tick = () => {
-    const progress = Math.min(1, (Date.now() - startedAt) / duration)
-    const eased = 1 - Math.pow(1 - progress, 3)
-    pieRotation.value = from + delta * eased
-    if (pieRectCache) drawPieCanvas(pieRectCache)
-    pieSnapRaf = progress < 1 ? rafFn(tick) : 0
-  }
-  tick()
-}
 
 /* ---------- 折线图：按在哪个点附近就看哪个点的明细 ---------- */
 
@@ -1870,13 +1355,6 @@ async function renderCharts() {
   }
   if (pieRect && pieRect.width > 0 && pieRect.height > 0) {
     drawPieCanvas(pieRect)
-    // 首次进入：等画布真的量到尺寸再开动画（量不到就根本没画布）。
-    // 只播一次——之后翻月、切主题重绘都是瞬时到位，不再抖
-    if (pieNeedReveal && !pieRevealed) {
-      pieNeedReveal = false
-      pieRevealed = true
-      playPieReveal()
-    }
   }
 }
 
@@ -1913,11 +1391,8 @@ function drawTrendCanvas(rect) {
     canvas.stroke()
   })
 
-  // 面积从线色渐隐到底，避免一整片色块把画面压平。
-  // 终点 x 用 1 而不是 0：App 端 canvas 对 x0 === x1 的竖向渐变直接跳过 fill，
-  // 静默不画（H5 正常）。差 1px 肉眼看不出，却绕开了那个退化包围盒。
-  // 饼图的侧壁当初就是这条踩雷了，整整三轮都以为是「饼变平了」
-  const areaGradient = canvas.createLinearGradient(0, chart.gridLines[0] * scaleY, 1, bottom)
+  // 面积从线色渐隐到底，避免一整片色块把画面压平
+  const areaGradient = canvas.createLinearGradient(0, chart.gridLines[0] * scaleY, 0, bottom)
   areaGradient.addColorStop(0, hexToRgba(palette.accent, 0.3))
   areaGradient.addColorStop(0.72, hexToRgba(palette.accent, 0.07))
   areaGradient.addColorStop(1, hexToRgba(palette.accent, 0))
@@ -1945,312 +1420,135 @@ function drawTrendCanvas(rect) {
   canvas.draw()
 }
 
-// 平面饼图：只画扇区 + 一圈白色细分隔线。
-// 原来是「3D 实心饼 + 日晷阴影 + 三十度斜切的椭圆透视」，颜色一降饱和，
-// 底部那圈暗面就显脏。拍平之后靠色相区分扇区，和这套 1px 描边、无毛玻璃的界面一致。
-//
-// 首次进入时扇区逐个展开：pieReveal 是 0→1 的总进度，每个扇区按 index 错开 45ms，
-// 各自用 easeOutBack 冲过头再回落——过冲就是「果冻」，错开就是「扇子打开」。
-const pieReveal = ref(1)
-let pieRevealRaf = 0
-let pieRectCache = null
-let pieNeedReveal = false
-let pieRevealed = false
+const PIE_SUNRISE_HOUR = 6
+const PIE_SUNSET_HOUR = 18
 
-// 1 → 1.1 → 1：先冲出去再落回，收尾那一下就是弹
-function easeOutBack(t) {
-  const c1 = 1.35
-  const c3 = c1 + 1
-  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2)
+// 日晷阴影：太阳左升右落，影子往反方向甩。正午 swing=0，回到原来看法；
+// 越接近日出日落越长越淡；太阳不在地平线上时不画阴影。
+function getPieShadow(hour) {
+  if (hour < PIE_SUNRISE_HOUR || hour >= PIE_SUNSET_HOUR) return null
+  const progress = (hour - PIE_SUNRISE_HOUR) / (PIE_SUNSET_HOUR - PIE_SUNRISE_HOUR)
+  const swing = Math.cos(progress * Math.PI)
+  const reach = Math.abs(swing)
+  return {
+    offsetX: swing * 0.27,
+    dropY: reach * 7,
+    stretchX: 1 + reach * 0.06,
+    shrinkY: 1 - reach * 0.1,
+    alpha: 0.12 * (1 - reach * 0.3)
+  }
 }
 
-function playPieReveal() {
-  if (pieRevealRaf) {
-    cafFn(pieRevealRaf)
-    pieRevealRaf = 0
-  }
-  if (prefersReducedMotion) {
-    pieReveal.value = 1
-    if (pieRectCache) drawPieCanvas(pieRectCache)
-    return
-  }
-  const duration = 780
-  const startedAt = Date.now()
-  pieReveal.value = 0
-  const tick = () => {
-    const progress = Math.min(1, (Date.now() - startedAt) / duration)
-    pieReveal.value = progress
-    if (pieRectCache) drawPieCanvas(pieRectCache)
-    if (progress < 1) {
-      pieRevealRaf = rafFn(tick)
-    } else {
-      pieRevealRaf = 0
-      pieReveal.value = 1
-    }
-  }
-  tick()
-}
-
-// 一块实心圆盘的画法：顶面是压扁的扇形，朝下那半圈有外壁，
-// 两条半径上是「剖面」。**剖面**才是关键——只有顶面 + 一层阴影，
-// 无论怎么调色都只是两张贴纸；有了剖面和侧壁的明暗转折才有体积
 function drawPieCanvas(rect) {
   const chart = pieChart.value
   if (!chart.slices.length) return
-  pieRectCache = rect
   const canvas = uni.createCanvasContext('pieCanvas')
-  const scale = Math.min(rect.width / chart.width, rect.height / chart.height)
-  const cx = chart.cx * (rect.width / chart.width)
-  const cy = chart.cy * (rect.height / chart.height)
-  const radius = chart.radius * scale
-  const ry = radius * PIE_FLATTEN
-  const thickness = chart.depth * scale
-  const reveal = pieReveal.value
+  const scaleX = rect.width / chart.width
+  const scaleY = rect.height / chart.height
+  const cx = chart.cx * scaleX
+  const cy = chart.cy * scaleY
+  const rx = chart.rx * scaleX
+  const ry = chart.ry * scaleY
+  const depth = chart.depth * scaleY
 
   canvas.clearRect(0, 0, rect.width, rect.height)
-
-  // 按「离观察者的远近」排序：sin 大的在下方、离眼睛近，后画才能盖住远处的侧壁
-  const bodies = chart.slices
-    .map((slice, index) => {
-      const delay = index * 0.04
-      const local = Math.max(0, Math.min(1, (reveal - delay) / Math.max(0.001, 1 - delay)))
-      const eased = local <= 0 ? 0 : Math.max(0, easeOutBack(local))
-      const radians = (slice.midAngle * Math.PI) / 180
-      // 选中权重 0..1（弹簧过冲时会 >1）：外移、抬起、放大全都由它驱动，
-      // 整块是同一个动作弹出来的，而不是三个属性各自补间
-      const scaleValue = pieScaleFor(slice.key, slice.selected)
-      const grow01 = (scaleValue - PIE_SCALE_IDLE) / (PIE_SCALE_FOCUS - PIE_SCALE_IDLE)
-      // 只有选中那块沿半径外移。其余各块不能外移——一外移，几条边就不在圆心
-      // 交汇了，锯齿状的缝会散成「摔碎的样子」；原地不动，缝就是个从圆心张开的 V
-      const pop = PIE_POP * grow01 * eased * scale
-      // 离心：转得越快，所有块一起往外让开一点，中间露出缝
-      const spin = pieSpinOut * PIE_SPIN_POP * eased * scale
-      // 每块自己的高度：切开之后又被顺手放回去的，不会严丝合缝
-      const jitterTilt = pieJitter(index, 2) * PIE_TILT
-      const tilt = (jitterTilt + (PIE_LIFT - jitterTilt) * grow01) * eased * scale
-      // 锯口按屏幕像素算再换算成角度：每块都不一样宽，但被吃掉的比例是同一个量级
-      const kerf = (PIE_KERF_MIN + pieJitter(index, 3) * (PIE_KERF_MAX - PIE_KERF_MIN)) * scale
-      return {
-        slice,
-        eased,
-        // 落在 3 点方向的那块放大、其余整体收小：光靠往外挪 12px 看不出差别，
-        // 大块小块还是一样大，「三点钟放大」就白做了。半径差 1.06 / 0.95
-        // 换算成面积是 25%，一眼就能看出谁是主角。
-        // 用弹簧值而不是直接读 selected：这样被选中的那一下是「弹」出来的
-        r: radius * scaleValue,
-        kerfDeg: (kerf / radius) * (180 / Math.PI),
-        bx: cx + Math.cos(radians) * (pop + spin),
-        by: cy + Math.sin(radians) * (pop + spin) * PIE_FLATTEN - tilt,
-        nearness: Math.sin(radians)
-      }
-    })
-    .sort((a, b) => a.nearness - b.nearness)
-
-  // 每一块的有效角度：两侧各让出一个锯口。每块的锯口宽度都不一样，
-  // 裂缝就宽窄不一——这就是「不均匀」
-  bodies.forEach((body) => {
-    // 角度不能跟着 easeOutBack 过冲：多出来的几度会盖住隔壁那块，
-    // 展开到 90% 时整圈会闪一下。过冲只留给外弹和抬起
-    const grow = Math.min(1, body.eased)
-    const sweep = body.slice.sweep * grow
-    // 缝隙上限还要跟自己的角度挂钩：一个 3% 的块只有 10°，两侧各让 5px 就吃掉
-    // 四成，底盘会从缝里漏成一块灰。8% 是「看得出来裂了、又不至于碎掉」的位置
-    const crack = Math.min(sweep * 0.08, body.kerfDeg * grow)
-    // **必须归一化**：pieRotation 是无界累加的，转两圈就是 -720°，a0/a1 会跑到
-    // ±2000°。下面判断「哪半圈能看到侧壁」用的是 max/min 比大小，角度一超界
-    // 就得到负的长度，侧壁整片被跳过——转一圈之后只剩顶面，就是这个原因。
-    // 顶面一直没事，因为 cos/sin 是周期的
-    const rawStart = body.slice.startAngle + crack
-    const start = ((((rawStart + 180) % 360) + 360) % 360) - 180
-    body.sweep = sweep
-    body.crack = crack
-    // 选中那块加厚：占比和金额要贴到它的侧面上，14px 的侧壁塞不下两行字
-    body.th = thickness * (body.slice.selected ? 1.9 : 1)
-    body.a0 = start
-    body.a1 = start + (sweep - crack * 2)
-    body.visible = sweep >= 0.4 && body.a1 - body.a0 >= 0.3
-  })
-
-  // —— 第一遍：壳体 ——
-  // 只画「看得见的侧面」：近端的侧壁 + 近端的剖面。**不画底面**——
-  // 饼是平摊在台面上的，底面永远看不见。之前每块都把底面往下挪一个厚度当厚度，
-  // 12° 的细块被这个下移从两条半径边漏出来，整圈变成一把立起来的刀片
-  //
-  // 先铺一层「接地阴影」：每块按自己的半径和位置往下错 6px 压一层淡黑。
-  // 它跟着每块走，不会像整圆底盘那样对不齐；错位小、颜色淡，
-  // 读起来是接触阴影而不是又一层底面
-  bodies.forEach((body) => {
-    if (!body.visible) return
-    const { bx, by, a0, a1 } = body
-    const r = body.r
-    const rY = r * PIE_FLATTEN
-    canvas.beginPath()
-    canvas.moveTo(bx, by + PIE_CONTACT)
-    traceCanvasArc(canvas, bx, by + PIE_CONTACT, r * 1.01, rY * 1.01, a0, a1, false)
-    canvas.closePath()
-    canvas.setFillStyle('rgba(26, 18, 22, 0.11)')
+  const now = new Date()
+  const shadow = getPieShadow(now.getHours() + now.getMinutes() / 60)
+  if (shadow) {
+    drawCanvasEllipse(
+      canvas,
+      cx + shadow.offsetX * rx,
+      cy + depth + 3 + shadow.dropY * scaleY,
+      rx * 0.98 * shadow.stretchX,
+      ry * 0.94 * shadow.shrinkY
+    )
+    canvas.setFillStyle(`rgba(48, 32, 40, ${shadow.alpha.toFixed(3)})`)
     canvas.fill()
-  })
-
-  bodies.forEach((body) => {
-    if (!body.visible) return
-    const { slice, bx, by, a0, a1 } = body
-    const r = body.r
-    const rY = r * PIE_FLATTEN
-
-    // 外壁：只有下半圈（sin > 0）朝向观察者，上半圈被自己的顶面挡住。
-    // a0/a1 归一之后可能落在别的 360 区间里（占比 >50% 的块被拖到 9-12 点方向时
-    // 一块能跨过 360），所以三份平移各求一次交集，交集非空就画一段
-    for (let wrap = -1; wrap <= 1; wrap += 1) {
-      // 侧壁严格落在自己顶面的角度里，不往缝里多铺。之前为了「让相邻侧壁接上」
-      // 往两侧各多铺一个锯口，结果顺时针那端会多出一小截露在白色描边外面，
-      // 每块都长一个尖，很难看
-      const wallFrom = Math.max(a0 + wrap * 360, 0.4)
-      const wallTo = Math.min(a1 + wrap * 360, 179.6)
-      if (wallTo - wallFrom <= 0.6) continue
-      canvas.beginPath()
-      traceCanvasArc(canvas, bx, by, r, rY, wallFrom, wallTo, true)
-      traceCanvasArc(canvas, bx, by + body.th, r, rY, wallTo, wallFrom, false)
-      canvas.closePath()
-      // 侧壁：斜向渐变（两个坐标都变）。竖向渐变（x0 === x1）在 App 的原生
-      // canvas 上整片不渲染，这就是之前侧壁只能填纯色、整块看着像纸片的原因。
-      // 上亮下暗才有一条圆柱的受光
-      const wallShade = canvas.createLinearGradient(bx - r * 0.18, by, bx + r * 0.18, by + rY + body.th)
-      wallShade.addColorStop(0, shadeHexColor(slice.color, -0.26))
-      wallShade.addColorStop(0.5, shadeHexColor(slice.color, -0.46))
-      wallShade.addColorStop(1, shadeHexColor(slice.color, -0.66))
-      canvas.setFillStyle(wallShade)
-      canvas.fill()
-    }
-
-    // 两条剖面只画给选中那块。其余各块的半径不完全一致（0.9R 与 1.1R），
-    // 剖面从圆心一直铺到自己的圆周，外端就会比隔壁那块多出一个小尖，
-    // 每块顺时针那头都冒一截出来——就是「最远端多出来一小截」的来源
-    if (slice.selected) {
-      drawPieCutFace(canvas, bx, by, r, rY, body.th, a0, -1, slice.color)
-      drawPieCutFace(canvas, bx, by, r, rY, body.th, a1, 1, slice.color)
-    }
-  })
-
-  // —— 第二遍：所有顶面 ——
-  // 盖在壳体之上。这一遍是整个重写的关键：以前每块画完自己的面就轮到下一块，
-  // 而剖面（圆心到圆周的一条带）的面积是「半径 × 厚度」，和扇区角度无关——
-  // 3% 的细块被两条 88px 长的暗面撑出体积，25% 的大块反而显小。
-  // 分成两遍，压在每个顶面底下的剖面自动被埋掉，只剩裂缝里和抬起来那块露在外面，
-  // 面积于是回到「角度占比」本身
-  bodies.forEach((body) => {
-    if (!body.visible) return
-    const { slice, bx, by, a0, a1, eased } = body
-    const r = body.r
-    const rY = r * PIE_FLATTEN
-
-    const topShade = canvas.createLinearGradient(bx - r, by - rY, bx + r, by + rY)
-    topShade.addColorStop(0, shadeHexColor(slice.color, 0.1))
-    topShade.addColorStop(0.5, shadeHexColor(slice.color, 0))
-    topShade.addColorStop(1, shadeHexColor(slice.color, -0.16))
-    canvas.beginPath()
-    canvas.moveTo(bx, by)
-    traceCanvasArc(canvas, bx, by, r, rY, a0, a1, false)
-    canvas.closePath()
-    canvas.setFillStyle(topShade)
-    canvas.fill()
-
-    // 远端（屏幕上半圈）看不到侧壁——那半圈的厚度被饼自己挡住，是对的。
-    // 但十来个分类里小块多半落在远端，整片就是纯色纸，和近端的块不像一个东西。
-    // 沿远端外缘压一条深边当「厚度」。两个坑：
-    //   1) 角度归一到 (-180,180] 之后，远端是 **-180…0**，不是 180…360
-    //   2) 描边是骑在路径上的，压在边界线上会有半个线宽漏到图形外面，
-    //      白色描边又盖住中间，结果是一条浮在白底上的游丝。所以往里缩 1.8px
-    const inset = 1.8 * scale
-    const farFrom = Math.max(a0, -179.6)
-    const farTo = Math.min(a1, -0.4)
-    if (farTo - farFrom > 0.6) {
-      canvas.beginPath()
-      traceCanvasArc(canvas, bx, by, r - inset, rY - inset * PIE_FLATTEN, farFrom, farTo, true)
-      canvas.setLineWidth(Math.max(1.4, 2.4 * scale))
-      canvas.setLineCap('butt')
-      canvas.setStrokeStyle(shadeHexColor(slice.color, -0.3))
-      canvas.stroke()
-    }
-
-    canvas.beginPath()
-    canvas.moveTo(bx, by)
-    traceCanvasArc(canvas, bx, by, r, rY, a0, a1, false)
-    canvas.closePath()
-    canvas.setLineWidth(Math.max(0.8, (slice.selected ? 1.5 : 1) * scale))
-    canvas.setLineJoin('round')
-    canvas.setLineCap('butt')
-    canvas.setStrokeStyle(slice.selected ? 'rgba(255, 255, 255, 0.98)' : 'rgba(255, 255, 255, 0.78)')
-    canvas.stroke()
-    // 顶面上不再写字：占比和金额已经贴到侧面上了（见下面那一遍）
-  })
-
-  // —— 第三遍：选中块的占比与金额 ——
-  // 挂在选中块外缘的固定位置上（3 点钟方向），不跟着「侧壁可见的那段弧」走。
-  // 之前按侧壁弧的中点定位：细分类的侧壁只有 1.8° 宽，文字要么被切掉、
-  // 要么因为弧长不足直接不画——「有些文字消失」就是这个。
-  // 字号也不再由厚度推算（26px 厚只算出 9.6px 字），改成固定档
-  const focus = bodies.find((body) => body.visible && body.slice.selected && body.eased >= 0.9)
-  if (focus) {
-    const { slice, bx, by } = focus
-    const r = focus.r
-    const labelX = bx + r + 8 * scale
-    const labelY = by + focus.th * 0.42
-    const bigSize = PIE_LABEL_SIZE
-    canvas.setTextAlign('left')
-    canvas.setTextBaseline('middle')
-    // 字现在落在卡片白底上，白字+暗描边会变成空心字。改成「分类色的深色版 +
-    // 白色描边」：任何底色上都读得出来，也不靠 setShadow / measureText
-    const ink = shadeHexColor(slice.color, -0.52)
-    const outline = Math.max(0.9, bigSize * 0.06)
-    const drawOutlined = (text, x, y, size) => {
-      canvas.setFontSize(size)
-      canvas.setFillStyle('rgba(255, 255, 255, 0.96)')
-      canvas.fillText(text, x - outline, y)
-      canvas.fillText(text, x + outline, y)
-      canvas.fillText(text, x, y - outline)
-      canvas.fillText(text, x, y + outline)
-      canvas.setFillStyle(ink)
-      canvas.fillText(text, x, y)
-    }
-    drawOutlined(`${slice.percent}%`, labelX, labelY - bigSize * 0.62, bigSize)
-    drawOutlined(`¥${Number(slice.amount).toFixed(2)}`, labelX, labelY + bigSize * 0.62, PIE_LABEL_SIZE_SUB)
   }
 
-  canvas.draw()
-
-  // 有块的弹簧还没落定（刚换了选中项）就把循环推起来，一帧一帧把它弹回去。
-  // 放在 draw 之后：本轮仍然按当前值画，下一帧才开始变
-  const unsettled = Object.keys(pieScales).some((key) => {
-    const entry = pieScales[key]
-    return Math.abs(entry.target - entry.value) > 0.0006
+  const topCy = cy - depth / 2
+  drawCanvasRadialFaces(canvas, chart.slices, cx, topCy, rx, ry, depth)
+  chart.slices.forEach((item) => {
+    drawCanvasSide(canvas, cx, topCy, rx, ry, depth, item.startAngle, item.endAngle, item.color)
   })
-  if (unsettled) startPieScaleLoop()
+
+  chart.slices.forEach((item) => {
+    const gradient = canvas.createLinearGradient(cx - rx, topCy - ry, cx + rx, topCy + ry)
+    gradient.addColorStop(0, shadeHexColor(item.color, 0.16))
+    gradient.addColorStop(0.32, item.color)
+    gradient.addColorStop(1, shadeHexColor(item.color, -0.12))
+
+    canvas.beginPath()
+    canvas.moveTo(cx, topCy)
+    traceCanvasArc(canvas, cx, topCy, rx, ry, item.startAngle, item.endAngle, false)
+    canvas.closePath()
+    canvas.setFillStyle(gradient)
+    canvas.fill()
+    canvas.setStrokeStyle('rgba(255, 255, 255, 0.42)')
+    canvas.setLineWidth(0.8)
+    canvas.stroke()
+  })
+
+  canvas.draw()
 }
 
-// 剖面：从圆心到圆周的一条竖带，高度就是厚度。投影之后是个平行四边形。
-// 只在「近端」画。远端（屏幕上半圈）的剖面虽然按法线算是朝向观察者的，
-// 但它被整块饼自己挡住——真实视角下那半圈只看得到顶面。之前不分远近都画，
-// 于是 3% 的细块被两条 88px 长、22px 高的剖面撑成一把立起来的刀片
-function drawPieCutFace(canvas, bx, by, rx, ry, thickness, angle, side, color) {
-  const radians = (angle * Math.PI) / 180
-  if (Math.sin(radians) < -0.25) return
-  const facing = side * Math.cos(radians)
-  if (facing < 0.02) return
-  const rim = piePoint(bx, by, rx, ry, angle)
+function drawCanvasRadialFaces(canvas, slices, cx, cy, rx, ry, depth) {
+  slices.forEach((item) => {
+    ;[item.startAngle, item.endAngle].forEach((angle) => {
+      const radians = (angle * Math.PI) / 180
+      if (Math.sin(radians) <= 0.04) return
+
+      const point = piePoint(cx, cy, rx, ry, angle)
+      canvas.beginPath()
+      canvas.moveTo(cx, cy)
+      canvas.lineTo(point.x, point.y)
+      canvas.lineTo(point.x, point.y + depth)
+      canvas.lineTo(cx, cy + depth)
+      canvas.closePath()
+      canvas.setFillStyle(shadeHexColor(item.color, -0.18))
+      canvas.fill()
+    })
+  })
+}
+
+// 侧面必须整条弧围成一个闭合多边形再填充。拆成多个子路径一次性 fill 在 App WebView
+// 里不生效，只留下描边，看起来就是几根几乎透明的竖线。
+function drawCanvasSide(canvas, cx, cy, rx, ry, depth, startAngle, endAngle, color) {
+  const from = Math.max(startAngle, 0)
+  const to = Math.min(endAngle, 180)
+  if (to - from < 0.4) return
+
+  const steps = Math.max(3, Math.ceil((to - from) / 6))
   canvas.beginPath()
-  canvas.moveTo(bx, by)
-  canvas.lineTo(rim.x, rim.y)
-  canvas.lineTo(rim.x, rim.y + thickness)
-  canvas.lineTo(bx, by + thickness)
+  for (let index = 0; index <= steps; index += 1) {
+    const angle = from + ((to - from) * index) / steps
+    const point = piePoint(cx, cy, rx, ry, angle)
+    if (index === 0) canvas.moveTo(point.x, point.y)
+    else canvas.lineTo(point.x, point.y)
+  }
+  for (let index = steps; index >= 0; index -= 1) {
+    const angle = from + ((to - from) * index) / steps
+    const point = piePoint(cx, cy, rx, ry, angle)
+    canvas.lineTo(point.x, point.y + depth)
+  }
   canvas.closePath()
-  // 正对观察者的那块亮一档，侧过去的压深，两个面之间才有转折
-  canvas.setFillStyle(shadeHexColor(color, facing > 0.5 ? -0.3 : -0.44))
+
+  const gradient = canvas.createLinearGradient(0, cy, 0, cy + ry + depth)
+  gradient.addColorStop(0, shadeHexColor(color, -0.04))
+  gradient.addColorStop(0.55, shadeHexColor(color, -0.2))
+  gradient.addColorStop(1, shadeHexColor(color, -0.34))
+  canvas.setFillStyle(gradient)
   canvas.fill()
 }
 
+function drawCanvasEllipse(canvas, cx, cy, rx, ry) {
+  canvas.beginPath()
+  traceCanvasArc(canvas, cx, cy, rx, ry, 0, 360, true)
+  canvas.closePath()
+}
+
 function traceCanvasArc(canvas, cx, cy, rx, ry, startAngle, endAngle, move) {
-  const steps = Math.max(4, Math.ceil(Math.abs(endAngle - startAngle) / 6))
+  const steps = Math.max(4, Math.ceil(Math.abs(endAngle - startAngle) / 8))
   for (let index = 0; index <= steps; index += 1) {
     const angle = startAngle + ((endAngle - startAngle) * index) / steps
     const point = piePoint(cx, cy, rx, ry, angle)
@@ -2820,7 +2118,7 @@ function onRefundChange(event) {
 }
 
 async function submitEditor() {
-  if (saving.value || saveDone.value) return
+  if (saving.value) return
   const amountText = String(form.amount).trim()
   if (!/^\d+(\.\d{1,2})?$/.test(amountText)) {
     uni.showToast({ title: amountText ? '金额最多两位小数' : '先填写金额', icon: 'none' })
@@ -2863,18 +2161,11 @@ async function submitEditor() {
   }
   saving.value = false
 
-  // 成功态：先把按钮切成 ✓ 已保存，停 520ms 再收抽屉。这一下停顿是「确认收到了」，
-  // 比抽屉瞬间消失 + 弹 toast 更像人手按完等回执。减弱动画的用家不等，直接关
   commitFeedback()
-  saveDone.value = true
-  if (!prefersReducedMotion) {
-    await new Promise((resolve) => setTimeout(resolve, 520))
-  }
-  saveDone.value = false
-
   closeEditor()
   currentMonth.value = payload.month
   await loadData()
+  uni.showToast({ title: '已保存', icon: 'success' })
 }
 
 function removeBill(item) {
@@ -2968,18 +2259,7 @@ function openSettings() {
 }
 
 function openDisplayLedger() {
-  if (switching.value) return
-  // 按下就换状态（底涨满 + 图标滑出 + 圆环滑入），120ms 后把页面推过去。
-  // 120ms 是「看得出在转」和「不用等」的中间值：圆环 380ms 一圈，这期间转约 1/3 圈；
-  // 再短（80ms）只能看到一帧静止的圆环，反而像卡住
-  switching.value = true
-  setTimeout(() => {
-    uni.navigateTo({ url: '/pages/display/display' })
-    // 等新页面完全盖住再复位，否则会在本页闪一下白底
-    setTimeout(() => {
-      switching.value = false
-    }, 420)
-  }, 120)
+  uni.navigateTo({ url: '/pages/display/display' })
 }
 
 function closeSettings() {
@@ -3189,20 +2469,18 @@ button::after {
 
 /* 按下反馈走 .button-hover 而不是 :active：uni-app 在 touchstart 时挂这个类，
    而 WebView 里 <button> 的 :active 并不可靠。过渡必须挂在 button 基类上——
-   挂在 .button-hover 上的话，松手时类被摘掉、过渡也跟着没了，回弹会硬切。
-   松手这半程用一条带轻微过冲的曲线（0.34,1.4,0.64,1）：缩小之后弹回原位时
-   多走一点点再落定，手感才像「按下去又弹回来」，而不是匀速回放 */
+   挂在 .button-hover 上的话，松手时类被摘掉、过渡也跟着没了，回弹会硬切。 */
 button {
-  transition: transform 120ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  transition: transform 140ms ease-out;
 }
 
 /* uni-app 自带 .button-hover{background:#dedede;color:rgba(0,0,0,.6)}，按下时会在
-   手指位置闪一块灰（透明分段按钮上尤其难看）。按下只做形变，不做变淡——
-   之前还叠了 opacity:.72，小字压到七成会发虚，看着像加载中而不是被按下 */
+   手指位置闪一块灰（透明分段按钮上尤其难看）。按下反馈改成轻微变淡 + 轻微缩小。 */
 .button-hover {
   background-color: transparent;
   color: inherit;
-  transform: scale(0.96);
+  opacity: 0.72;
+  transform: scale(0.97);
 }
 
 /* 按下那一刻必须 0ms 就位。过渡只负责「松手回弹」那半程，留在各按钮的基类上；
@@ -3344,116 +2622,21 @@ button.button-hover {
   width: 64rpx;
   height: 64rpx;
   border-radius: var(--r-md);
-  background: var(--surface);
+  background: var(--accent-soft);
+  border: 1rpx solid var(--line);
   color: var(--accent-deep);
-  box-shadow: inset 0 0 0 1rpx var(--line);
-  /* 不写 overflow: hidden——那会把 ::after 撑出来的 88rpx 命中区裁到 64rpx 里。
-     ::before 用 inset:0 就铺满，本来也不会溢出 */
-  isolation: isolate;
 }
 
-/* 按下时底色从中心涨满（MicroKit 的 dot-fill）。它和图标滑出、圆环滑入
-   在同一条时间线上一起发生，所以 80ms 就够「有反应」，不必等动画播完 */
-.side-toggle::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: inherit;
-  background: linear-gradient(180deg, var(--btn-from), var(--btn-to));
-  opacity: 0;
-  transform: scale(0.35);
-  pointer-events: none;
-  transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease-out;
-}
-
-.side-toggle.is-switching::before {
-  opacity: 1;
-  transform: scale(1);
-  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 90ms linear;
-}
-
-/* 双向箭头用 CSS 画，不用字符 ⇋（U+21CB）：那个字形手机字体里没有，
-   回退字体画出来是两条断开、错位的横线，对不准中线。
-   这里改成「两页纸叠在一起」——它说的是「有两份账」，比双向箭头只说「切」更具体，
-   也和「展示账本是镜像副本」的语义对得上 */
+/* ⇋（U+21CB）不在手机的 UI 字体里，Roboto 没有这个箭头，实际是回退字形画的，
+   基线让它在这个方框里偏低一两个像素，靠 translateY 补回来。
+   注意位移必须挂在图标上而不是按钮上：按下时 .button-hover 会把按钮的 transform
+   整个换成 scale(0.97)，挂在按钮上会被覆盖掉。
+   如果实际是偏高，把 -4rpx 改成正数即可 */
 .side-toggle-icon {
-  position: relative;
-  z-index: 1;
   display: block;
-  width: 34rpx;
-  height: 32rpx;
-  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), opacity 140ms ease-out;
-}
-
-/* 图标向左滑出并淡掉，和 MicroKit 里「原文字 translate-x + opacity 0」同一手法 */
-.side-toggle-icon.is-out {
-  transform: translateX(-150%);
-  opacity: 0;
-  transition-duration: 140ms, 100ms;
-}
-
-.side-sheet {
-  position: absolute;
-  width: 22rpx;
-  height: 26rpx;
-  border-radius: 4rpx;
-}
-
-/* 后面那页只描边、压暗，撑出层次。往外错 2rpx 让它在小尺寸下也露得出来
-   （34rpx 的图标里，两页各 22rpx，重叠太多就只剩一个色块了） */
-.side-sheet.is-back {
-  top: -2rpx;
-  right: -2rpx;
-  border: 3rpx solid currentColor;
-  opacity: 0.55;
-}
-
-/* 前面那页实心，视线落在它上面 */
-.side-sheet.is-front {
-  left: 0;
-  bottom: 0;
-  background: currentColor;
-}
-
-/* 点下去按钮里转圈，直到页面切完。它说明的不是「你按到了」，
-   而是「正在过去」——和底色涨满、图标滑出同步发生，三样一起动才够有反应 */
-.side-spinner {
-  position: absolute;
-  z-index: 1;
-  width: 32rpx;
-  height: 32rpx;
-  border-radius: 50%;
-  border: 3rpx solid rgba(255, 255, 255, 0.22);
-  border-top-color: var(--on-accent);
-  opacity: 0;
-  transform: translateX(150%);
-  /* 旋转必须用独立的 rotate 属性，不能写进 transform：
-     关键帧里的 transform 会盖掉这里做位移的那条，圆环就卡在原地不转了 */
-  animation: sideSpin 380ms linear infinite;
-  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), opacity 140ms ease-out;
-}
-
-/* 从右侧滑入，比图标晚 50ms 起步，交接时两个元素不会挤在中间 */
-.side-spinner.is-in {
-  opacity: 1;
-  transform: translateX(0);
-  transition-delay: 50ms;
-}
-
-@keyframes sideSpin {
-  from {
-    rotate: 0deg;
-  }
-  to {
-    rotate: 360deg;
-  }
-}
-
-/* 转圈时不要缩放，圆环会被压扁 */
-.side-toggle.is-switching {
-  transform: none;
-  color: var(--on-accent);
+  font-size: var(--fs-xl);
+  line-height: 1;
+  transform: translateY(-4rpx);
 }
 
 .top-actions {
@@ -3470,10 +2653,9 @@ button.button-hover {
   height: 64rpx;
   border-radius: var(--r-md);
   background: var(--surface);
-  /* 内描边代替 border + 外阴影：MicroKit 的按钮就是这一层 1px 描边，
-     外面不挂影子。border 会参与布局、还会在某些 DPR 下虚成两条 */
-  box-shadow: inset 0 0 0 1rpx var(--line);
+  border: 1rpx solid var(--line);
   color: var(--text);
+  box-shadow: var(--shadow-xs);
 }
 
 .text-action {
@@ -3509,7 +2691,7 @@ button.button-hover {
   height: 68rpx;
   border-radius: var(--r-md);
   background: var(--surface);
-  box-shadow: inset 0 0 0 1rpx var(--line);
+  border: 1rpx solid var(--line);
   color: var(--accent-deep);
   font-size: var(--fs-2xl);
   line-height: 1;
@@ -3542,13 +2724,13 @@ button.button-hover {
 
 .summary-panel {
   margin-top: var(--sp-6);
-  padding: var(--sp-5);
+  padding: var(--sp-6);
   border-radius: var(--r-lg);
   background: var(--surface);
   border: 1rpx solid var(--line);
   box-shadow: var(--shadow);
-  /* 这里原来挂了 blur(20px) saturate(180%) 的毛玻璃。MicroKit 全站不用毛玻璃：
-     卡片就靠 1px 描边 + 一层紧影立起来。去掉之后字更实、滚动也不再每帧重做模糊 */
+  /* saturate 是 iOS 材料的招牌：只 blur 会发灰，补上饱和度才是「毛玻璃」而不是「磨砂塑料」 */
+  backdrop-filter: blur(20px) saturate(180%);
 }
 
 .summary-label {
@@ -3650,10 +2832,7 @@ button.button-hover {
 
 .section-heading {
   display: flex;
-  /* 以前是 flex-end：标题下面还有一行小字时，靠底对齐正好和右边的分段控件齐平。
-     小字去掉后只剩一行标题，flex-end 会把它贴到分段控件底边、显得偏下，
-     改回居中才平衡 */
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--sp-5);
   margin-bottom: var(--sp-4);
@@ -3689,19 +2868,19 @@ button.button-hover {
   box-sizing: border-box;
 }
 
-/* 高亮块自己会滑：切换年/月/日、支出/收入时左右平移，不再整块跳。
-   参考 MicroKit 的分段控件——指示器是品牌色实心块，文字在块上转白；
-   原来是白块 + 阴影，和底槽的对比只有一点点，看起来像「没选中」 */
+/* 高亮块自己会滑：切换年/月/日、支出/收入时左右平移，不再整块跳 */
 .segment-thumb {
   position: absolute;
   top: var(--sp-1);
   bottom: var(--sp-1);
   left: var(--sp-1);
   border-radius: var(--r-sm);
-  background: var(--btn-to);
-  box-shadow: 0 2rpx 6rpx rgba(103, 65, 81, 0.18);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-xs);
   pointer-events: none;
-  transition: transform 280ms var(--ease-out);
+  /* 年/月/日、支出/收入也是一天几十次的切换，200ms 就够。
+     曲线不用 Material 的 (0.4,0,0.2,1)——它开头太软，在 200ms 尺度上尤其拖 */
+  transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .segment-button {
@@ -3736,14 +2915,12 @@ button.button-hover {
 }
 
 .segment-button.active {
-  color: var(--on-accent);
+  color: var(--accent-deep);
   font-weight: var(--fw-heavy);
-  transition: color 200ms var(--ease-soft);
 }
 
 .trend-panel,
 .distribution-panel {
-  position: relative;
   padding: var(--sp-5);
   border-radius: var(--r-lg);
   background: var(--surface);
@@ -3759,15 +2936,6 @@ button.button-hover {
   position: relative;
   width: 100%;
   overflow: visible;
-}
-
-/* 临时探针，验完就删 */
-/* 手势命中层：透明、只盖住圆盘。border-radius 让椭圆外的矩形角落不吃触摸，
-   WebView 的命中测试认这个 */
-.pie-hit {
-  position: absolute;
-  z-index: 2;
-  border-radius: 50%;
 }
 
 .trend-chart-svg,
@@ -3924,28 +3092,14 @@ button.button-hover {
 
 .pie-legend-row {
   position: absolute;
-  right: 1%;
-  /* 56% 而不是 52%：饼图放大到半径 96 后最右（含选中块外弹 14）到 200，这里从 202 开始。
-     再往左一行字就放不下「分类名 + 百分比 + 金额」三样，名字会被省略成 … */
-  left: 56%;
+  right: 2.5%;
+  left: 50%;
   display: flex;
   align-items: center;
   min-width: 0;
   gap: var(--sp-2);
   transform: translateY(-50%);
-  transform-origin: left center;
   white-space: nowrap;
-  /* 每一行的倾斜和纵向压扁由 JS 按它在圆盘平面上的角度算好，写在行内 style 里 */
-  /* top 每帧都在跟着手指改，这里绝不能给 transition——160ms 的过渡会让整列
-     追不上饼的旋转，看起来像拖着一串残影。只有淡入淡出还是软的 */
-  transition: opacity 140ms ease-out;
-}
-
-/* 转到 3 点方向的那一项：加粗、深色，并且是唯一显示百分比和金额的 */
-.pie-legend-row.is-selected .pie-label-name {
-  color: var(--text-strong);
-  font-weight: var(--fw-heavy);
-  font-size: var(--fs-sm);
 }
 
 .pie-legend-dot {
@@ -3957,9 +3111,7 @@ button.button-hover {
 }
 
 .pie-label-name {
-  /* 别写 flex: 1：那样它会被压到 0 宽、名字直接变成「…」。
-     名字是这一行的主信息，缩也是最后才缩它 */
-  flex: 0 1 auto;
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   color: var(--text);
@@ -3969,18 +3121,6 @@ button.button-hover {
   /* 必须显式写：uni-app 的 <text> 自带 white-space，继承不到父容器的 nowrap，
      导致中文在字与字之间断行（金额一长「约会」就折成两行）。同 .bill-title 的写法 */
   white-space: nowrap;
-}
-
-/* 小块只留名字：字小一号、颜色退一档，右侧不再出现百分比和金额，
-   视觉上自然把注意力让给上面那几块大的 */
-.pie-legend-row.is-minor .pie-label-name {
-  color: var(--text-soft);
-  font-size: var(--fs-2xs);
-  font-weight: var(--fw-medium);
-}
-
-.pie-legend-row.is-minor .pie-legend-dot {
-  opacity: 0.7;
 }
 
 .pie-label-meta {
@@ -4078,10 +3218,8 @@ button.button-hover {
   position: relative;
   display: flex;
   align-items: center;
-  min-height: 96rpx;
-  /* 上下从 sp-4 收到 sp-3：一行账单本来就靠图标和文字撑高，
-     16rpx 的上下内距只会让列表变松。右侧留 74rpx 给删除按钮 */
-  padding: var(--sp-3) 74rpx var(--sp-3) var(--sp-4);
+  min-height: 108rpx;
+  padding: var(--sp-4) 74rpx var(--sp-4) var(--sp-4);
   transition: background-color 0.15s ease;
 }
 
@@ -4196,15 +3334,6 @@ button.button-hover {
   background: var(--surface-soft);
   color: var(--text-soft);
   font-size: var(--fs-md);
-  transition: transform 120ms ease-out, background-color 120ms ease-out;
-}
-
-/* 删除按钮按下时直接变红：手指一碰就知道「这是会删东西的那颗」，
-   比整行缩放更明确，也不会带动旁边金额 */
-.delete-button.button-hover {
-  background: var(--danger-from);
-  color: var(--on-danger);
-  transform: scale(0.88);
 }
 
 .add-button,
@@ -4217,13 +3346,7 @@ button.button-hover {
   box-sizing: border-box;
 }
 
-/* 注意：不要再写 position: relative。定位来自上面 .add-button, .batch-bar 那条
-   共享规则里的 position: fixed——按钮要永远贴在屏幕底部（和展示账本的「新增虚拟账单」
-   一样），一写 relative 就退化成「跟着页面流走、停在文档最底下」。
-   fixed 本身就会给 ::before 当定位基准，不需要 relative */
 .add-button {
-  isolation: isolate;
-  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4231,51 +3354,12 @@ button.button-hover {
   height: 92rpx;
   margin-left: -143rpx;
   border-radius: var(--r-pill);
-  /* 白底 + 一道内描边：质感和 MicroKit 一致——不用渐变当底，靠描边和留白立起来 */
-  background: var(--surface-strong);
-  color: var(--text-strong);
+  background: linear-gradient(135deg, var(--btn-from), var(--btn-to));
+  color: var(--on-accent);
   font-size: var(--fs-md);
   font-weight: var(--fw-heavy);
-  letter-spacing: -0.01em;
-  box-shadow: inset 0 0 0 1rpx var(--line);
-  box-shadow: inset 0 0 0 1rpx var(--line), var(--shadow-xs);
-  transition: transform 120ms cubic-bezier(0.34, 1.4, 0.64, 1), color 140ms ease-out;
-}
-
-/* 按下：一团品牌色从中心涨满整颗胶囊（MicroKit 的圆点填充手法），文字转白。
-   平时是安静的白胶囊，按下才有颜色——这是它和「导入/导出」那种常驻白块的区别 */
-.add-button::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 0;
-  width: 160%;
-  aspect-ratio: 1 / 1;
-  transform: translate(-50%, -50%) scale(0.12);
-  border-radius: 50%;
-  background: linear-gradient(180deg, var(--btn-from), var(--btn-to));
-  opacity: 0;
-  pointer-events: none;
-  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease-out;
-}
-
-/* 文字要压在色块之上 */
-.add-button > text {
-  position: relative;
-  z-index: 1;
-  transition: color 120ms ease-out;
-}
-
-.add-button.button-hover {
-  color: var(--on-accent);
-  transform: scale(0.985);
-}
-
-.add-button.button-hover::before {
-  transform: translate(-50%, -50%) scale(1);
-  opacity: 1;
-  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 60ms linear;
+  box-shadow: var(--shadow-float);
+  box-shadow: 0 18rpx 42rpx color-mix(in srgb, var(--btn-from) 36%, transparent);
 }
 
 .add-plus {
@@ -4297,7 +3381,7 @@ button.button-hover {
      同样先写不透明兜底：color-mix() 不被支持时不能变成全透明 */
   background: var(--surface-strong);
   background: color-mix(in srgb, var(--surface-strong) 90%, transparent);
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(24px) saturate(180%);
   border: 1rpx solid var(--line);
   box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.5), var(--shadow-float);
 }
@@ -4364,7 +3448,7 @@ button.button-hover {
   justify-content: center;
   background: var(--scrim);
   /* 遮罩不是「黑一层」，是把后面那层推到远处：模糊 + 补饱和度才是 iOS 的景深 */
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(20px) saturate(160%);
   /* 遮罩用 animation 而不是 transition：弹层是 v-if 新建出来的，第一帧就已处在
      目标状态，transition 不会触发；keyframe 在元素首次绘制时就会跑 */
   animation: maskIn 160ms ease-out;
@@ -4384,10 +3468,11 @@ button.button-hover {
   border-radius: var(--r-sheet) var(--r-sheet) 0 0;
   /* 先写不透明兜底再写半透明：color-mix() 要 Chrome 111+，不被支持时整条声明会被
      丢弃而不是退化，那样抽屉会变成全透明、账目直接叠在模糊层上。
-     模糊从 16px 收到 12px：材料只留一层，够把下面的内容推开就行 */
+     模糊只给 16px——抽屉的 transform 正是每帧被拖拽改写的属性，blur 又无法复用缓存，
+     30px 会让整个弹簧期间每帧重做一次整幅模糊。背后那层遮罩本来就模糊过，够用。 */
   background: var(--surface-strong);
   background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px) saturate(180%);
   /* 亮上边 = 光打在材料边缘，iOS 抽屉的招牌细节 */
   box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.5);
   color: var(--text);
@@ -4752,24 +3837,6 @@ button.button-hover {
   box-shadow: 0 14rpx 28rpx color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
-.primary-button.button-hover {
-  transform: translateY(1rpx) scale(0.985);
-  box-shadow: 0 6rpx 14rpx color-mix(in srgb, var(--accent) 20%, transparent);
-}
-
-/* 保存成功的确认态：按钮原地变成 ✓ 已保存，停半秒再关抽屉。
-   成功反馈放在按钮上，比「抽屉啪地关掉 + 弹个 toast」更像确认过的样子 */
-.primary-button.is-done {
-  background: var(--positive-text);
-  box-shadow: 0 6rpx 14rpx color-mix(in srgb, var(--positive-text) 26%, transparent);
-}
-
-.save-check {
-  margin-right: var(--sp-2);
-  font-size: var(--fs-md);
-  font-weight: var(--fw-black);
-}
-
 .primary-button.compact {
   height: 86rpx;
   padding: 0 var(--sp-5);
@@ -5114,17 +4181,6 @@ button.button-hover {
   .trend-point-label,
   .trend-axis-value {
     transition: opacity 0.2s ease;
-  }
-
-  /* 按下时那团扩散的品牌色：减弱动画下不做膨胀，直接瞬间到位 */
-  .add-button::before {
-    transition-duration: 1ms;
-  }
-
-  /* 转圈不能减速：它不是装饰动画，是「正在过去」的唯一指示。
-     之前压到 1.6s 一圈，80ms 里只转 18°，看起来就是静止的 */
-  .side-spinner {
-    animation-duration: 700ms;
   }
 }
 

@@ -2,28 +2,23 @@ const DB_NAME = 'jianji_ledger'
 const DB_PATH = '_doc/jianji_ledger.db'
 const H5_STORAGE_KEY = 'jianji_bills_v1'
 
-// 分类色板：色相沿环拉开、饱和度压到 30–45%、明度落在中间档。
-// 原来是十种高饱和纯色（#FF7A9E / #4D96FF / #9B72F7…），单看鲜艳，放在一起
-// 饼图的十个扇区会互相抢，而且和现在这套更素的界面（1px 描边、紧影、没有毛玻璃）打架。
-// 改完之后：① 扇区靠色相区分，不靠戳眼的饱和度；② 图标底色用的是「这个色 + 12% 透明度」，
-// 低饱和才撑得住白底；③ 图标前景色（就是这个色本身）在浅底上仍然清楚。
 export const CATEGORIES = [
-  { key: 'food', emoji: '🍜', name: '餐饮', color: '#D9805A' },
-  { key: 'drink', emoji: '🧋', name: '奶茶饮品', color: '#C29A5E' },
-  { key: 'transport', emoji: '🚇', name: '出行交通', color: '#6F9BC4' },
-  { key: 'shopping', emoji: '🛍️', name: '购物', color: '#A48BC9' },
-  { key: 'study', emoji: '📚', name: '学习', color: '#6FAE85' },
-  { key: 'date', emoji: '💕', name: '约会', color: '#D4738E' },
-  { key: 'play', emoji: '🎮', name: '娱乐', color: '#6FB3B0' },
-  { key: 'daily', emoji: '🧻', name: '日用', color: '#CDAE59' },
-  { key: 'medical', emoji: '🏥', name: '医疗', color: '#CC7171' },
-  { key: 'other', emoji: '📦', name: '其他', color: '#9AA5B4' }
+  { key: 'food', emoji: '🍜', name: '餐饮', color: '#FF7A9E' },
+  { key: 'drink', emoji: '🧋', name: '奶茶饮品', color: '#FFB35C' },
+  { key: 'transport', emoji: '🚇', name: '出行交通', color: '#4D96FF' },
+  { key: 'shopping', emoji: '🛍️', name: '购物', color: '#9B72F7' },
+  { key: 'study', emoji: '📚', name: '学习', color: '#6BCB77' },
+  { key: 'date', emoji: '💕', name: '约会', color: '#F78FB3' },
+  { key: 'play', emoji: '🎮', name: '娱乐', color: '#4ECDC4' },
+  { key: 'daily', emoji: '🧻', name: '日用', color: '#FFD93D' },
+  { key: 'medical', emoji: '🏥', name: '医疗', color: '#FF6B6B' },
+  { key: 'other', emoji: '📦', name: '其他', color: '#A8B8D8' }
 ]
 
 // 收入不是分类，只并进 CATEGORY_MAP 供 normalizeBill 解析出图标和颜色，
 // 不进 CATEGORIES —— 分类格仍然是 10 格，不能多出一格。
 // 换 emoji 不影响判重：createFingerprint 记的是类别 key（'income'），不是图标
-export const INCOME_CATEGORY = { key: 'income', emoji: '💵', name: '收入', color: '#4E9E7B' }
+export const INCOME_CATEGORY = { key: 'income', emoji: '💵', name: '收入', color: '#2AA36B' }
 
 export const CATEGORY_MAP = CATEGORIES.concat([INCOME_CATEGORY]).reduce((map, category) => {
   map[category.key] = category

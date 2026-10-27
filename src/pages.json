@@ -19,8 +19,8 @@
         "enablePullDownRefresh": false,
         "app-plus": {
           "bounce": "none",
-          "animationType": "slide-in-right",
-          "animationDuration": 200
+          "animationType": "fade-in",
+          "animationDuration": 180
         }
       }
     }
